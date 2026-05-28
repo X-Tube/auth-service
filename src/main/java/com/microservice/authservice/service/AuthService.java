@@ -7,10 +7,13 @@ import com.microservice.authservice.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Service;
 
+@Service
 @Service
 public class AuthService {
 
+    @Autowired
     @Autowired
     private UserRepository userRepository;
 
