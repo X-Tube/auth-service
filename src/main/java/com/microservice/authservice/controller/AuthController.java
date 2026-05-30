@@ -1,5 +1,7 @@
 package com.microservice.authservice.controller;
 
+import com.microservice.authservice.dto.LoginRequestDTO;
+import com.microservice.authservice.dto.LoginResponseDTO;
 import com.microservice.authservice.dto.RegisterRequestDTO;
 import com.microservice.authservice.service.AuthService;
 
@@ -24,4 +26,11 @@ public class AuthController {
         String message = authService.register(body);
         return ResponseEntity.ok(message);
     }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponseDTO> login(@RequestBody LoginRequestDTO dto){
+        LoginResponseDTO response = authService.login(dto);
+        return ResponseEntity.ok(response);
+    }
+
 }
