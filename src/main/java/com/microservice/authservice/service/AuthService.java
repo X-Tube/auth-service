@@ -1,15 +1,19 @@
 package com.microservice.authservice.service;
 
-import com.microservice.authservice.dto.LoginRequestDTO;
-import com.microservice.authservice.dto.LoginResponseDTO;
-import com.microservice.authservice.dto.RegisterRequestDTO;
+import com.microservice.authservice.dto.*;
 import com.microservice.authservice.model.User;
 import com.microservice.authservice.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.UUID;
 
 @RequiredArgsConstructor
 @Service
@@ -18,11 +22,12 @@ public class AuthService {
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
 
-    public String register(RegisterRequestDTO dto) {
+    public TokenPairResponse register(RegisterRequestDTO dto) {
 
         if(userRepository.findByEmail(dto.email()).isPresent()){
-            throw new RuntimeException("Email already registered");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
 
         User user = new User();
@@ -31,19 +36,37 @@ public class AuthService {
 
         userRepository.save(user);
 
-        return "New user successfully registered!";
+        String accessToken = jwtService.generateAccessToken(user);
+        String refreshToken = jwtService.generateRefreshToken(user);
+
+        return new TokenPairResponse(accessToken, refreshToken);
     }
 
-    public LoginResponseDTO login(LoginRequestDTO dto) {
-        User user = userRepository.findByEmail(dto.email())
-                .orElseThrow(() -> new RuntimeException("Invalid username or password"));
+    public TokenPairResponse login(LoginRequestDTO dto) {
+        var authenticationToken = new UsernamePasswordAuthenticationToken(dto.email(), dto.password());
+        Authentication authentication = authenticationManager.authenticate(authenticationToken);
+        User user = (User) authentication.getPrincipal();
 
-        if (!passwordEncoder.matches(dto.password(), user.getPassword())){
-            throw new RuntimeException("Invalid username or password");
-        }
+        String accessToken = jwtService.generateAccessToken(user);
+        String refreshToken = jwtService.generateRefreshToken(user);
 
-        String token = jwtService.generateToken(user);
-        return new LoginResponseDTO(token);
+        return new TokenPairResponse(accessToken, refreshToken);
+
+    }
+
+    public TokenPairResponse refreshToken(RefreshTokenRequestDTO dto) {
+
+        String oldToken = dto.refreshToken();
+        String userIdString = jwtService.extractUserId(oldToken);
+
+        UUID userId = UUID.fromString(userIdString);
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+
+        String newAccessToken = jwtService.generateAccessToken(user);
+        String newRefreshToken = jwtService.generateRefreshToken(user);
+
+        return new TokenPairResponse(newAccessToken, newRefreshToken);
+
     }
 
 }

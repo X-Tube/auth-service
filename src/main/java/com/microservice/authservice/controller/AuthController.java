@@ -5,7 +5,9 @@ import com.microservice.authservice.service.AuthService;
 
 import com.microservice.authservice.service.JwtService;
 import io.jsonwebtoken.Claims;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.antlr.v4.runtime.Token;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,33 +26,24 @@ public class AuthController {
     private final JwtService jwtService;
 
     @PostMapping("/register")
-    public ResponseEntity<String> register (@RequestBody RegisterRequestDTO body){
+    public ResponseEntity<TokenPairResponse> register (@Valid @RequestBody RegisterRequestDTO dto){
 
-        String message = authService.register(body);
-        return ResponseEntity.ok(message);
+        TokenPairResponse tokens = authService.register(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(tokens);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponseDTO> login(@RequestBody LoginRequestDTO dto){
-        LoginResponseDTO response = authService.login(dto);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<TokenPairResponse> login(@Valid @RequestBody LoginRequestDTO dto){
+        TokenPairResponse tokens = authService.login(dto);
+        return ResponseEntity.ok(tokens);
+
     }
 
-    @PostMapping("/validate")
-    public ResponseEntity<ValidateTokenResponseDTO> validateToken(@RequestBody ValidateTokenRequestDTO dto){
-        try {
-            var claims = jwtService.extractAllClaims(dto.token());
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenPairResponse> refresh(@Valid @RequestBody RefreshTokenRequestDTO dto){
+        TokenPairResponse tokenPairResponse = authService.refreshToken(dto);
 
-            ValidateTokenResponseDTO response = new ValidateTokenResponseDTO(
-                    claims.getSubject(),
-                    claims.get("email", String.class),
-                    claims.get("role", String.class)
-            );
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
+        return ResponseEntity.ok(tokenPairResponse);
     }
 
 }
