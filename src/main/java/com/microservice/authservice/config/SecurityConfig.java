@@ -1,6 +1,7 @@
 package com.microservice.authservice.config;
 
 import com.microservice.authservice.repository.UserRepository;
+import com.microservice.authservice.security.UserPrincipal;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -49,7 +50,8 @@ public class SecurityConfig {
     @Bean
     public UserDetailsService userDetailsService (UserRepository userRepository){
         return username -> userRepository.findByEmail(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email:" + username));
+                .map(user -> new UserPrincipal(user))
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + username));
     }
 
     @Bean

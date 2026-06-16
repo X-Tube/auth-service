@@ -3,8 +3,8 @@ package com.microservice.authservice.dto;
 import jakarta.validation.constraints.NotBlank;
 
 public record LoginRequestDTO(
-        @NotBlank(message = "Password is required")
+        @NotBlank(message = "Email is required")
         String email,
-        @NotBlank
+        @NotBlank(message = "Password is required")
         String password
 ) {}

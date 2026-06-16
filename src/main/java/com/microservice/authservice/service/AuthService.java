@@ -2,8 +2,12 @@ package com.microservice.authservice.service;
 
 import com.microservice.authservice.dto.*;
 import com.microservice.authservice.model.User;
+import com.microservice.authservice.model.UserVerification;
 import com.microservice.authservice.repository.UserRepository;
 
+import com.microservice.authservice.repository.UserVerificationRepository;
+import com.microservice.authservice.security.UserPrincipal;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -26,7 +30,9 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
+    private final UserVerificationRepository userVerificationRepository;
 
+    @Transactional
     public String register(RegisterRequestDTO dto) {
 
         if(userRepository.findByEmail(dto.email()).isPresent()){
@@ -36,19 +42,22 @@ public class AuthService {
         User user = new User();
         user.setEmail(dto.email());
         user.setPassword(passwordEncoder.encode(dto.password()));
+        User savedUser = userRepository.save(user);
 
         String code = String.format("%06d", new Random().nextInt(999999));
-        user.setVerificationCode(code);
 
-        user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(15));
-
-        userRepository.save(user);
+        UserVerification verification = new UserVerification();
+        verification.setCode(code);
+        verification.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        verification.setUser(savedUser);
+        userVerificationRepository.save(verification);
 
         emailService.sendVerificationEmail(user.getEmail(), code);
 
         return  "Registration successful. Please check your email for the verification code.";
     }
 
+    @Transactional
     public TokenPairResponse verifyUser(VerifyRequestDTO dto) {
         User user = userRepository.findByEmail(dto.email())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
@@ -57,20 +66,21 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Account is already verified");
         }
 
-        if (user.getVerificationCodeExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+        UserVerification verification = userVerificationRepository.findByUser(user)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Verification code not found"));
+
+        if (verification.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Verification code has expired");
         }
 
-        if (!user.getVerificationCode().equals(dto.code())) {
+        if (!verification.getCode().equals(dto.code())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid verification code");
         }
 
         user.setEnabled(true);
-
-        user.setVerificationCode(null);
-        user.setVerificationCodeExpiresAt(null);
-
         userRepository.save(user);
+
+        userVerificationRepository.delete(verification);
 
         String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = jwtService.generateRefreshToken(user);
@@ -78,6 +88,7 @@ public class AuthService {
         return new TokenPairResponse(accessToken, refreshToken);
     }
 
+    @Transactional
     public String resendVerificationCode(ResendCodeRequestDTO dto) {
 
         User user = userRepository.findByEmail(dto.email())
@@ -89,11 +100,13 @@ public class AuthService {
 
         String newCode = String.format("%06d", new java.util.Random().nextInt(999999));
 
-        user.setVerificationCode(newCode);
+        UserVerification verification = userVerificationRepository.findByUser(user)
+                        .orElse(new UserVerification());
 
-        user.setVerificationCodeExpiresAt(java.time.LocalDateTime.now().plusMinutes(15));
-
-        userRepository.save(user);
+        verification.setUser(user);
+        verification.setCode(newCode);
+        verification.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        userVerificationRepository.save(verification);
 
         emailService.sendVerificationEmail(user.getEmail(), newCode);
 
@@ -103,7 +116,8 @@ public class AuthService {
     public TokenPairResponse login(LoginRequestDTO dto) {
         var authenticationToken = new UsernamePasswordAuthenticationToken(dto.email(), dto.password());
         Authentication authentication = authenticationManager.authenticate(authenticationToken);
-        User user = (User) authentication.getPrincipal();
+        UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+        User user = principal.getUser();
 
         String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = jwtService.generateRefreshToken(user);
