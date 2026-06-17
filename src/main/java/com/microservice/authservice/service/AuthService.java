@@ -47,7 +47,7 @@ public class AuthService {
         String code = String.format("%06d", new Random().nextInt(999999));
 
         UserVerification verification = new UserVerification();
-        verification.setCode(code);
+        verification.setCode(passwordEncoder.encode(code));
         verification.setExpiresAt(LocalDateTime.now().plusMinutes(15));
         verification.setUser(savedUser);
         userVerificationRepository.save(verification);
@@ -73,7 +73,7 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Verification code has expired");
         }
 
-        if (!verification.getCode().equals(dto.code())) {
+        if (!passwordEncoder.matches(dto.code(), verification.getCode())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid verification code");
         }
 
@@ -126,19 +126,18 @@ public class AuthService {
 
     }
 
-    public TokenPairResponse refreshToken(RefreshTokenRequestDTO dto) {
-
-        String oldToken = dto.refreshToken();
+    public TokenPairResponse refreshToken(String oldToken) {
         String userIdString = jwtService.extractUserId(oldToken);
 
         UUID userId = UUID.fromString(userIdString);
-        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        User user = userRepository.findById(userId).
+                orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         String newAccessToken = jwtService.generateAccessToken(user);
         String newRefreshToken = jwtService.generateRefreshToken(user);
 
         return new TokenPairResponse(newAccessToken, newRefreshToken);
-
     }
+
 
 }
