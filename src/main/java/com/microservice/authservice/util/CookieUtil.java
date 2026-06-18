@@ -15,7 +15,7 @@ public class CookieUtil {
     @Value("${security.refresh-expiration}")
     private long refreshTokenDuration;
 
-    public static final String ACCESS_TOKEN_COOKIE = "acessToken";
+    public static final String ACCESS_TOKEN_COOKIE = "accessToken";
     public static final String REFRESH_TOKEN_COOKIE = "refreshToken";
 
     public ResponseCookie createAccessTokenCookie(String token) {
